@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Face Filter Pro</title>
+    <style>
+        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        #container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        
+        #status { position: absolute; top: 20px; width: 100%; text-align: center; z-index: 100; color: #00f2ea; font-weight: bold; font-size: 1.2rem; text-shadow: 0 0 10px #00f2ea; }
+        
+        /* Красиве меню вибору */
+        #menu {
+            position: absolute; z-index: 200; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(15px);
+            transition: opacity 0.5s;
+        }
+        .menu-title {
+            font-size: 3rem; color: #fff; text-shadow: 0 0 15px #00f2ea, 0 0 30px #ff0050; 
+            margin-bottom: 50px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900;
+            text-align: center;
+        }
+        .menu-btn {
+            background: linear-gradient(45deg, #ff0050, #00f2ea);
+            border: none; padding: 18px 50px; color: white; font-size: 1.5rem;
+            border-radius: 50px; cursor: pointer; font-weight: bold; margin: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; width: 350px;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .menu-btn:hover {
+            transform: translateY(-5px) scale(1.05); 
+            box-shadow: 0 0 30px rgba(0, 242, 234, 0.8), 0 0 30px rgba(255, 0, 80, 0.8);
+        }
+        .menu-btn:disabled {
+            background: #555; color: #aaa; cursor: not-allowed; box-shadow: none; transform: none;
+        }
+
+        /* Кнопка повернення в меню */
+        #backBtn {
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            background: rgba(255, 255, 255, 0.1); padding: 12px 25px; border-radius: 30px;
+            color: white; border: 1px solid rgba(255, 255, 255, 0.3); font-size: 1.1rem;
+            cursor: pointer; display: none; backdrop-filter: blur(10px); transition: all 0.3s;
+        }
+        #backBtn:hover { background: rgba(255, 255, 255, 0.3); }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <div id="status">Завантаження нейромереж (це може зайняти хвилинку)...</div>
+        
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+        
+        <button id="backBtn">⬅ Назад у меню</button>
+
+        <div id="menu">
+            <div class="menu-title">Обери свій стиль</div>
+            <button class="menu-btn" id="btnSmartyk" disabled>Стати Смартиком</button>
+            <button class="menu-btn" id="btnGlasses" disabled>Окуляри</button>
+            <button class="menu-btn" id="btnHat" disabled>Шапка</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { FaceLandmarker, HandLandmarker, PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
+
+        const video = document.getElementById("webcam");
+        const canvas = document.getElementById("output_canvas");
+        const ctx = canvas.getContext("2d");
+        const status = document.getElementById("status");
+        const menu = document.getElementById("menu");
+        const backBtn = document.getElementById("backBtn");
+
+        const btns = {
+            smartyk: document.getElementById("btnSmartyk"),
+            glasses: document.getElementById("btnGlasses"),
+            hat: document.getElementById("btnHat")
+        };
+
+        let faceLandmarker, handLandmarker, poseLandmarker;
+        let isLoaded = false;
+        let currentMode = '';
+        let streamStarted = false;
+        
+        // Завантажуємо всі потрібні картинки
+        const images = {
+            head: new Image(),
+            hand: new Image(),
+            body: new Image(),
+            glasses: new Image(),
+            hat: new Image()
+        };
+        images.head.src = 'Head.png';
+        images.hand.src = 'Hand.png';
+        images.body.src = 'Body.png';
+        images.glasses.src = 'Glasses.png';
+        images.hat.src = 'Hat.png';
+
+        async function init() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+            
+            // 1. Модель Обличчя
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
+                runningMode: "VIDEO", numFaces: 1
+            });
+
+            // 2. Модель Рук
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" },
+                runningMode: "VIDEO", numHands: 2
+            });
+
+            // 3. Модель Тіла (Пози)
+            poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`, delegate: "GPU" },
+                runningMode: "VIDEO"
+            });
+
+            status.innerText = "Готово до гри!";
+            setTimeout(() => { status.style.display = "none"; }, 2000);
+            isLoaded = true;
+
+            // Активуємо кнопки меню
+            Object.values(btns).forEach(btn => btn.disabled = false);
+        }
+
+        async function startGame(mode) {
+            currentMode = mode;
+            menu.style.display = "none";
+            backBtn.style.display = "block";
+
+            if (!streamStarted) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                video.srcObject = stream;
+                video.onloadeddata = () => {
+                    streamStarted = true;
+                    predict();
+                };
+            }
+        }
+
+        // Обробники кнопок
+        btns.smartyk.addEventListener("click", () => startGame('smartyk'));
+        btns.glasses.addEventListener("click", () => startGame('glasses'));
+        btns.hat.addEventListener("click", () => startGame('hat'));
+
+        backBtn.addEventListener("click", () => {
+            currentMode = '';
+            menu.style.display = "flex";
+            backBtn.style.display = "none";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        function predict() {
+            if (currentMode === '') {
+                requestAnimationFrame(predict);
+                return;
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const now = performance.now();
+
+            // Виконуємо розпізнавання залежно від обраного режиму
+            if (currentMode === 'smartyk') {
+                const faceResults = faceLandmarker.detectForVideo(video, now);
+                const handResults = handLandmarker.detectForVideo(video, now);
+                const poseResults = poseLandmarker.detectForVideo(video, now);
+                
+                drawBody(poseResults);  // Малюємо тіло спочатку (щоб голова була поверх)
+                drawHead(faceResults);  // Голова
+                drawHands(handResults); // Руки
+            } 
+            else if (currentMode === 'glasses') {
+                const faceResults = faceLandmarker.detectForVideo(video, now);
+                drawGlasses(faceResults);
+            } 
+            else if (currentMode === 'hat') {
+                const faceResults = faceLandmarker.detectForVideo(video, now);
+                drawHat(faceResults);
+            }
+
+            requestAnimationFrame(predict);
+        }
+
+        // === ФУНКЦІЇ МАЛЮВАННЯ ===
+
+        function drawHead(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const nose = points[1], chin = points[152], forehead = points[10], leftEye = points[33], rightEye = points[263];
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const faceSize = Math.sqrt(Math.pow(chin.x - forehead.x, 2) + Math.pow(chin.y - forehead.y, 2)) * canvas.height;
+                const imgWidth = faceSize * 2.2; 
+                const imgHeight = imgWidth * (images.head.height / images.head.width);
+
+                ctx.save();
+                ctx.translate(nose.x * canvas.width, nose.y * canvas.height);
+                ctx.rotate(angle);
+                if (images.head.complete && images.head.naturalWidth !== 0) {
+                    ctx.drawImage(images.head, -imgWidth / 2, -imgHeight * 0.6, imgWidth, imgHeight);
+                }
+                ctx.restore();
+            }
+        }
+
+        function drawBody(results) {
+            if (results.landmarks && results.landmarks.length > 0) {
+                const pose = results.landmarks[0];
+                const leftShoulder = pose[11], rightShoulder = pose[12], leftHip = pose[23], rightHip = pose[24];
+                
+                // Центр між плечима та стегнами
+                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+                const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const midHipX = (leftHip.x + rightHip.x) / 2;
+                const midHipY = (leftHip.y + rightHip.y) / 2;
+
+                const angle = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x);
+                // Розмір тіла залежить від відстані від плечей до стегон
+                const torsoHeight = Math.sqrt(Math.pow(midHipX - midShoulderX, 2) + Math.pow(midHipY - midShoulderY, 2)) * canvas.height;
+                const imgHeight = torsoHeight * 1.5; // Робимо трохи довшим, щоб закривало гарно
+                const imgWidth = imgHeight * (images.body.width / images.body.height);
+
+                ctx.save();
+                ctx.translate(midShoulderX * canvas.width, midShoulderY * canvas.height);
+                ctx.rotate(angle);
+                if (images.body.complete && images.body.naturalWidth !== 0) {
+                    // Зміщуємо трохи вниз від плечей
+                    ctx.drawImage(images.body, -imgWidth / 2, -imgHeight * 0.1, imgWidth, imgHeight);
+                }
+                ctx.restore();
+            }
+        }
+
+        function drawHands(results) {
+            if (results.landmarks && results.landmarks.length > 0) {
+                for (const hand of results.landmarks) {
+                    const wrist = hand[0]; // Зап'ястя
+                    const middleFinger = hand[9]; // Основа середнього пальця
+
+                    const angle = Math.atan2(middleFinger.y - wrist.y, middleFinger.x - wrist.x) + Math.PI / 2;
+                    const handSize = Math.sqrt(Math.pow(middleFinger.x - wrist.x, 2) + Math.pow(middleFinger.y - wrist.y, 2)) * canvas.height;
+                    const imgHeight = handSize * 6; // Масштабуємо руку
+                    const imgWidth = imgHeight * (images.hand.width / images.hand.height);
+
+                    ctx.save();
+                    ctx.translate(wrist.x * canvas.width, wrist.y * canvas.height);
+                    ctx.rotate(angle);
+                    if (images.hand.complete && images.hand.naturalWidth !== 0) {
+                        ctx.drawImage(images.hand, -imgWidth / 2, -imgHeight * 0.7, imgWidth, imgHeight);
+                    }
+                    ctx.restore();
+                }
+            }
+        }
+
+        function drawGlasses(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const leftEye = points[33], rightEye = points[263], noseBridge = points[168];
+
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const eyeDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
+                const imgWidth = eyeDistance * 2.5; // Налаштування ширини окулярів
+                const imgHeight = imgWidth * (images.glasses.height / images.glasses.width);
+
+                ctx.save();
+                ctx.translate(noseBridge.x * canvas.width, noseBridge.y * canvas.height);
+                ctx.rotate(angle);
+                if (images.glasses.complete && images.glasses.naturalWidth !== 0) {
+                    ctx.drawImage(images.glasses, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+                }
+                ctx.restore();
+            }
+        }
+
+        function drawHat(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const forehead = points[10], leftEye = points[33], rightEye = points[263];
+
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const faceWidth = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
+                const imgWidth = faceWidth * 3; // Шапка має бути ширшою за обличчя
+                const imgHeight = imgWidth * (images.hat.height / images.hat.width);
+
+                ctx.save();
+                ctx.translate(forehead.x * canvas.width, forehead.y * canvas.height);
+                ctx.rotate(angle);
+                if (images.hat.complete && images.hat.naturalWidth !== 0) {
+                    // Зміщуємо шапку вгору, щоб вона сиділа на маківці
+                    ctx.drawImage(images.hat, -imgWidth / 2, -imgHeight * 0.9, imgWidth, imgHeight);
+                }
+                ctx.restore();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
