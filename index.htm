@@ -20,14 +20,17 @@
         }
         .menu-title {
             font-size: 3rem; color: #fff; text-shadow: 0 0 15px #00f2ea, 0 0 30px #ff0050; 
-            margin-bottom: 50px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900;
+            margin-bottom: 40px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900;
             text-align: center;
+        }
+        .menu-grid {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; max-width: 800px;
         }
         .menu-btn {
             background: linear-gradient(45deg, #ff0050, #00f2ea);
-            border: none; padding: 18px 50px; color: white; font-size: 1.5rem;
-            border-radius: 50px; cursor: pointer; font-weight: bold; margin: 15px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; width: 350px;
+            border: none; padding: 18px 40px; color: white; font-size: 1.3rem;
+            border-radius: 50px; cursor: pointer; font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; width: 300px;
             text-transform: uppercase; letter-spacing: 1px;
         }
         .menu-btn:hover {
@@ -46,6 +49,37 @@
             cursor: pointer; display: none; backdrop-filter: blur(10px); transition: all 0.3s;
         }
         #backBtn:hover { background: rgba(255, 255, 255, 0.3); }
+
+        /* Ефект диско-кімнати */
+        #discoLights {
+            position: absolute; width: 100%; height: 100%; z-index: 40;
+            pointer-events: none; display: none;
+            mix-blend-mode: color;
+            animation: discoGlow 2s infinite alternate;
+        }
+
+        @keyframes discoGlow {
+            0% { background: rgba(255, 0, 80, 0.3); }
+            33% { background: rgba(0, 242, 234, 0.3); }
+            66% { background: rgba(157, 0, 255, 0.3); }
+            100% { background: rgba(255, 255, 0, 0.3); }
+        }
+
+        /* Анімація Диско-кулі (погойдування) */
+        @keyframes swing { 
+            0% { transform: translateX(-50%) rotate(-15deg); }
+            100% { transform: translateX(-50%) rotate(15deg); }
+        }
+        #discoBall {
+            position: absolute; top: 0px; left: 50%; transform: translateX(-50%);
+            z-index: 50; display: none;
+            transform-origin: top center;
+            animation: swing 2s ease-in-out infinite alternate;
+        }
+        #discoBall img {
+            width: 150px; height: auto;
+            filter: drop-shadow(0 0 20px #00f2ea);
+        }
     </style>
 </head>
 <body>
@@ -53,16 +87,27 @@
     <div id="container">
         <div id="status">Завантаження нейромереж (це може зайняти хвилинку)...</div>
         
+        <div id="discoLights"></div>
+        <div id="discoBall"><img src="Disco.png" alt="Disco Ball"></div>
+        <audio id="danceMusic" src="Song.mp3" loop></audio>
+
         <video id="webcam" autoplay playsinline></video>
         <canvas id="output_canvas"></canvas>
         
         <button id="backBtn">⬅ Назад у меню</button>
 
         <div id="menu">
-            <div class="menu-title">Обери свій стиль</div>
-            <button class="menu-btn" id="btnSmartyk" disabled>Стати Смартиком</button>
-            <button class="menu-btn" id="btnGlasses" disabled>Окуляри</button>
-            <button class="menu-btn" id="btnHat" disabled>Шапка</button>
+            <div class="menu-title">Обери свій СМАРТ-стиль</div>
+            <div class="menu-grid">
+                <button class="menu-btn" id="btnSmartyk" disabled>Стати Смартиком</button>
+                <button class="menu-btn" id="btnDance" disabled>Танцювати</button> 
+                <button class="menu-btn" id="btnGlasses" disabled>Окуляри</button>
+                <button class="menu-btn" id="btnHat" disabled>Шапка</button>
+                <button class="menu-btn" id="btnCollar" disabled>Нашийник</button>
+                <button class="menu-btn" id="btnBone" disabled>Кісточка</button>
+                <button class="menu-btn" id="btnEars" disabled>Вушка</button>
+                <button class="menu-btn" id="btnTail" disabled>Хвостик</button>
+            </div>
         </div>
     </div>
 
@@ -75,11 +120,19 @@
         const status = document.getElementById("status");
         const menu = document.getElementById("menu");
         const backBtn = document.getElementById("backBtn");
+        const discoBall = document.getElementById("discoBall");
+        const discoLights = document.getElementById("discoLights");
+        const danceMusic = document.getElementById("danceMusic");
 
         const btns = {
             smartyk: document.getElementById("btnSmartyk"),
+            dance: document.getElementById("btnDance"),
             glasses: document.getElementById("btnGlasses"),
-            hat: document.getElementById("btnHat")
+            hat: document.getElementById("btnHat"),
+            collar: document.getElementById("btnCollar"),
+            bone: document.getElementById("btnBone"),
+            ears: document.getElementById("btnEars"),
+            tail: document.getElementById("btnTail")
         };
 
         let faceLandmarker, handLandmarker, poseLandmarker;
@@ -87,36 +140,34 @@
         let currentMode = '';
         let streamStarted = false;
         
-        // Завантажуємо всі потрібні картинки
         const images = {
-            head: new Image(),
-            hand: new Image(),
-            body: new Image(),
-            glasses: new Image(),
-            hat: new Image()
+            head: new Image(), hand: new Image(), body: new Image(),
+            glasses: new Image(), hat: new Image(),
+            collar: new Image(), bone: new Image(), ears: new Image(), tail: new Image()
         };
         images.head.src = 'Head.png';
         images.hand.src = 'Hand.png';
         images.body.src = 'Body.png';
         images.glasses.src = 'Glasses.png';
         images.hat.src = 'Hat.png';
+        images.collar.src = 'Collar.png';
+        images.bone.src = 'Bone.png';
+        images.ears.src = 'Ears.png';
+        images.tail.src = 'Tail.png';
 
         async function init() {
             const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
             
-            // 1. Модель Обличчя
             faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
                 baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
                 runningMode: "VIDEO", numFaces: 1
             });
 
-            // 2. Модель Рук
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" },
                 runningMode: "VIDEO", numHands: 2
             });
 
-            // 3. Модель Тіла (Пози)
             poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
                 baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`, delegate: "GPU" },
                 runningMode: "VIDEO"
@@ -126,7 +177,6 @@
             setTimeout(() => { status.style.display = "none"; }, 2000);
             isLoaded = true;
 
-            // Активуємо кнопки меню
             Object.values(btns).forEach(btn => btn.disabled = false);
         }
 
@@ -134,6 +184,12 @@
             currentMode = mode;
             menu.style.display = "none";
             backBtn.style.display = "block";
+
+            if (mode === 'dance') {
+                discoBall.style.display = "block";
+                discoLights.style.display = "block";
+                danceMusic.play().catch(e => console.log("Music blocked"));
+            }
 
             if (!streamStarted) {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
@@ -145,15 +201,18 @@
             }
         }
 
-        // Обробники кнопок
-        btns.smartyk.addEventListener("click", () => startGame('smartyk'));
-        btns.glasses.addEventListener("click", () => startGame('glasses'));
-        btns.hat.addEventListener("click", () => startGame('hat'));
+        Object.keys(btns).forEach(key => {
+            btns[key].addEventListener("click", () => startGame(key));
+        });
 
         backBtn.addEventListener("click", () => {
             currentMode = '';
             menu.style.display = "flex";
             backBtn.style.display = "none";
+            discoBall.style.display = "none";
+            discoLights.style.display = "none";
+            danceMusic.pause();
+            danceMusic.currentTime = 0;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         });
 
@@ -168,31 +227,26 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const now = performance.now();
 
-            // Виконуємо розпізнавання залежно від обраного режиму
-            if (currentMode === 'smartyk') {
+            if (currentMode === 'smartyk' || currentMode === 'dance') {
                 const faceResults = faceLandmarker.detectForVideo(video, now);
                 const handResults = handLandmarker.detectForVideo(video, now);
                 const poseResults = poseLandmarker.detectForVideo(video, now);
-                
-                drawBody(poseResults);  // Малюємо тіло спочатку (щоб голова була поверх)
-                drawHead(faceResults);  // Голова
-                drawHands(handResults); // Руки
+                drawBody(poseResults); 
+                drawHead(faceResults); 
+                drawHands(handResults);
             } 
-            else if (currentMode === 'glasses') {
-                const faceResults = faceLandmarker.detectForVideo(video, now);
-                drawGlasses(faceResults);
-            } 
-            else if (currentMode === 'hat') {
-                const faceResults = faceLandmarker.detectForVideo(video, now);
-                drawHat(faceResults);
-            }
+            else if (currentMode === 'glasses') drawGlasses(faceLandmarker.detectForVideo(video, now));
+            else if (currentMode === 'hat') drawHat(faceLandmarker.detectForVideo(video, now));
+            else if (currentMode === 'collar') drawCollar(faceLandmarker.detectForVideo(video, now));
+            else if (currentMode === 'bone') drawBone(faceLandmarker.detectForVideo(video, now));
+            else if (currentMode === 'ears') drawEars(faceLandmarker.detectForVideo(video, now));
+            else if (currentMode === 'tail') drawTail(poseLandmarker.detectForVideo(video, now), now);
 
             requestAnimationFrame(predict);
         }
 
-        // === ФУНКЦІЇ МАЛЮВАННЯ ===
-
-        function drawHead(results) {
+        // Функції малювання (без змін, як ти і просив)
+        function drawHead(results) { 
             if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                 const points = results.faceLandmarks[0];
                 const nose = points[1], chin = points[152], forehead = points[10], leftEye = points[33], rightEye = points[263];
@@ -200,104 +254,110 @@
                 const faceSize = Math.sqrt(Math.pow(chin.x - forehead.x, 2) + Math.pow(chin.y - forehead.y, 2)) * canvas.height;
                 const imgWidth = faceSize * 2.2; 
                 const imgHeight = imgWidth * (images.head.height / images.head.width);
-
-                ctx.save();
-                ctx.translate(nose.x * canvas.width, nose.y * canvas.height);
-                ctx.rotate(angle);
-                if (images.head.complete && images.head.naturalWidth !== 0) {
-                    ctx.drawImage(images.head, -imgWidth / 2, -imgHeight * 0.6, imgWidth, imgHeight);
-                }
+                ctx.save(); ctx.translate(nose.x * canvas.width, nose.y * canvas.height); ctx.rotate(angle);
+                if (images.head.complete && images.head.naturalWidth !== 0) ctx.drawImage(images.head, -imgWidth / 2, -imgHeight * 0.6, imgWidth, imgHeight);
                 ctx.restore();
             }
         }
-
-        function drawBody(results) {
+        function drawBody(results) { 
             if (results.landmarks && results.landmarks.length > 0) {
                 const pose = results.landmarks[0];
                 const leftShoulder = pose[11], rightShoulder = pose[12], leftHip = pose[23], rightHip = pose[24];
-                
-                // Центр між плечима та стегнами
-                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
-                const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-                const midHipX = (leftHip.x + rightHip.x) / 2;
-                const midHipY = (leftHip.y + rightHip.y) / 2;
-
+                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2, midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const midHipX = (leftHip.x + rightHip.x) / 2, midHipY = (leftHip.y + rightHip.y) / 2;
                 const angle = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x);
-                // Розмір тіла залежить від відстані від плечей до стегон
                 const torsoHeight = Math.sqrt(Math.pow(midHipX - midShoulderX, 2) + Math.pow(midHipY - midShoulderY, 2)) * canvas.height;
-                const imgHeight = torsoHeight * 1.5; // Робимо трохи довшим, щоб закривало гарно
-                const imgWidth = imgHeight * (images.body.width / images.body.height);
-
-                ctx.save();
-                ctx.translate(midShoulderX * canvas.width, midShoulderY * canvas.height);
-                ctx.rotate(angle);
-                if (images.body.complete && images.body.naturalWidth !== 0) {
-                    // Зміщуємо трохи вниз від плечей
-                    ctx.drawImage(images.body, -imgWidth / 2, -imgHeight * 0.1, imgWidth, imgHeight);
-                }
+                const imgHeight = torsoHeight * 1.5, imgWidth = imgHeight * (images.body.width / images.body.height);
+                ctx.save(); ctx.translate(midShoulderX * canvas.width, midShoulderY * canvas.height); ctx.rotate(angle);
+                if (images.body.complete && images.body.naturalWidth !== 0) ctx.drawImage(images.body, -imgWidth / 2, -imgHeight * 0.1, imgWidth, imgHeight);
                 ctx.restore();
             }
         }
-
-        function drawHands(results) {
+        function drawHands(results) { 
             if (results.landmarks && results.landmarks.length > 0) {
                 for (const hand of results.landmarks) {
-                    const wrist = hand[0]; // Зап'ястя
-                    const middleFinger = hand[9]; // Основа середнього пальця
-
+                    const wrist = hand[0], middleFinger = hand[9];
                     const angle = Math.atan2(middleFinger.y - wrist.y, middleFinger.x - wrist.x) + Math.PI / 2;
                     const handSize = Math.sqrt(Math.pow(middleFinger.x - wrist.x, 2) + Math.pow(middleFinger.y - wrist.y, 2)) * canvas.height;
-                    const imgHeight = handSize * 6; // Масштабуємо руку
-                    const imgWidth = imgHeight * (images.hand.width / images.hand.height);
-
-                    ctx.save();
-                    ctx.translate(wrist.x * canvas.width, wrist.y * canvas.height);
-                    ctx.rotate(angle);
-                    if (images.hand.complete && images.hand.naturalWidth !== 0) {
-                        ctx.drawImage(images.hand, -imgWidth / 2, -imgHeight * 0.7, imgWidth, imgHeight);
-                    }
+                    const imgHeight = handSize * 4, imgWidth = imgHeight * (images.hand.width / images.hand.height);
+                    ctx.save(); ctx.translate(wrist.x * canvas.width, wrist.y * canvas.height); ctx.rotate(angle);
+                    if (images.hand.complete && images.hand.naturalWidth !== 0) ctx.drawImage(images.hand, -imgWidth / 2, -imgHeight * 0.7, imgWidth, imgHeight);
                     ctx.restore();
                 }
             }
         }
-
-        function drawGlasses(results) {
+        function drawGlasses(results) { 
             if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                 const points = results.faceLandmarks[0];
                 const leftEye = points[33], rightEye = points[263], noseBridge = points[168];
-
                 const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
                 const eyeDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
-                const imgWidth = eyeDistance * 2.5; // Налаштування ширини окулярів
-                const imgHeight = imgWidth * (images.glasses.height / images.glasses.width);
-
-                ctx.save();
-                ctx.translate(noseBridge.x * canvas.width, noseBridge.y * canvas.height);
-                ctx.rotate(angle);
-                if (images.glasses.complete && images.glasses.naturalWidth !== 0) {
-                    ctx.drawImage(images.glasses, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
-                }
+                const imgWidth = eyeDistance * 2.5, imgHeight = imgWidth * (images.glasses.height / images.glasses.width);
+                ctx.save(); ctx.translate(noseBridge.x * canvas.width, noseBridge.y * canvas.height); ctx.rotate(angle);
+                if (images.glasses.complete && images.glasses.naturalWidth !== 0) ctx.drawImage(images.glasses, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
                 ctx.restore();
             }
         }
-
-        function drawHat(results) {
+        function drawHat(results) { 
             if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                 const points = results.faceLandmarks[0];
                 const forehead = points[10], leftEye = points[33], rightEye = points[263];
-
                 const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
                 const faceWidth = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
-                const imgWidth = faceWidth * 3; // Шапка має бути ширшою за обличчя
-                const imgHeight = imgWidth * (images.hat.height / images.hat.width);
-
-                ctx.save();
-                ctx.translate(forehead.x * canvas.width, forehead.y * canvas.height);
-                ctx.rotate(angle);
-                if (images.hat.complete && images.hat.naturalWidth !== 0) {
-                    // Зміщуємо шапку вгору, щоб вона сиділа на маківці
-                    ctx.drawImage(images.hat, -imgWidth / 2, -imgHeight * 0.9, imgWidth, imgHeight);
+                const imgWidth = faceWidth * 3, imgHeight = imgWidth * (images.hat.height / images.hat.width);
+                ctx.save(); ctx.translate(forehead.x * canvas.width, forehead.y * canvas.height); ctx.rotate(angle);
+                if (images.hat.complete && images.hat.naturalWidth !== 0) ctx.drawImage(images.hat, -imgWidth / 2, -imgHeight * 0.75, imgWidth, imgHeight);
+                ctx.restore();
+            }
+        }
+        function drawCollar(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const chin = points[152], leftEye = points[33], rightEye = points[263];
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const faceWidth = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
+                const imgWidth = faceWidth * 2.5, imgHeight = imgWidth * (images.collar.height / images.collar.width);
+                ctx.save(); ctx.translate(chin.x * canvas.width, chin.y * canvas.height); ctx.rotate(angle);
+                if (images.collar.complete && images.collar.naturalWidth !== 0) ctx.drawImage(images.collar, -imgWidth / 2, -imgHeight * 0.2, imgWidth, imgHeight);
+                ctx.restore();
+            }
+        }
+        function drawBone(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const lipsCenter = points[13], leftEye = points[33], rightEye = points[263];
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const faceWidth = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
+                const imgWidth = faceWidth * 1.8, imgHeight = imgWidth * (images.bone.height / images.bone.width);
+                ctx.save(); ctx.translate(lipsCenter.x * canvas.width, lipsCenter.y * canvas.height); ctx.rotate(angle);
+                if (images.bone.complete && images.bone.naturalWidth !== 0) ctx.drawImage(images.bone, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+                ctx.restore();
+            }
+        }
+        function drawEars(results) {
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const points = results.faceLandmarks[0];
+                const leftPoint = points[234], rightPoint = points[454], leftEye = points[33], rightEye = points[263];
+                const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                const faceWidth = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2)) * canvas.width;
+                const imgWidth = faceWidth * 0.8, imgHeight = imgWidth * (images.ears.height / images.ears.width);
+                if (images.ears.complete && images.ears.naturalWidth !== 0) {
+                    ctx.save(); ctx.translate(leftPoint.x * canvas.width, leftPoint.y * canvas.height); ctx.rotate(angle); ctx.drawImage(images.ears, -imgWidth * 0.6, -imgHeight, imgWidth, imgHeight); ctx.restore();
+                    ctx.save(); ctx.translate(rightPoint.x * canvas.width, rightPoint.y * canvas.height); ctx.rotate(angle); ctx.scale(-1, 1); ctx.drawImage(images.ears, -imgWidth * 0.6, -imgHeight, imgWidth, imgHeight); ctx.restore();
                 }
+            }
+        }
+        function drawTail(results, now) {
+            if (results.landmarks && results.landmarks.length > 0) {
+                const pose = results.landmarks[0];
+                const leftHip = pose[23], rightHip = pose[24];
+                if ((leftHip.visibility && leftHip.visibility < 0.5) || (rightHip.visibility && rightHip.visibility < 0.5)) return; 
+                const midHipX = (leftHip.x + rightHip.x) / 2, midHipY = (leftHip.y + rightHip.y) / 2;
+                const hipWidth = Math.sqrt(Math.pow(rightHip.x - leftHip.x, 2) + Math.pow(rightHip.y - leftHip.y, 2)) * canvas.width;
+                const imgWidth = hipWidth * 3, imgHeight = imgWidth * (images.tail.height / images.tail.width);
+                const wagAngle = Math.sin(now * 0.005) * 0.5;
+                ctx.save(); ctx.translate(midHipX * canvas.width, midHipY * canvas.height); ctx.rotate(wagAngle);
+                if (images.tail.complete && images.tail.naturalWidth !== 0) ctx.drawImage(images.tail, -imgWidth / 2, -imgHeight * 0.2, imgWidth, imgHeight);
                 ctx.restore();
             }
         }
